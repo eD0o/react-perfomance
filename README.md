@@ -130,3 +130,140 @@ Developers often have better hardware than users. Simulate slowness to catch rea
 - `Preventing unnecessary work is better than optimizing necessary work`
 - Only optimize when there's a measurable problem
 - Don’t trust blogs blindly use actual performance data
+
+---
+
+## 1.3 - React Rendering Cycle
+
+Understanding React’s rendering cycle is essential to diagnosing performance issues. `React doesn’t rerender “just because” something has to trigger it`.
+
+### 🚦 What Triggers a Render?
+
+- User interaction (clicks, typing, navigation)
+- State updates (useState, useReducer)
+- Prop changes
+- Context updates
+- Polling intervals or subscriptions
+
+Each of these can cause a component (and its children) to rerender. While React is efficient, `unnecessary rerenders can lead to jank, layout shifts, and wasted computation`.
+
+### ⚙️ The Three Phases of React's Render Cycle
+
+React’s internal render cycle can be broken down into three key phases (with a passive phase in between):
+
+#### 1. Render Phase
+
+- React calls the render functions of components (functional or class-based).
+- It creates a “work-in-progress” tree and compares the result with the previous render output (diffing).
+- This phase is pure: it `should not include side effects`.
+
+#### 2. Commit Phase
+
+- React takes the list of changes and applies them to the DOM.
+- Refs are also updated in this phase.
+- This is a mutating phase where side effects can occur.
+
+#### (Between Commit & Cleanup) Passive Effects Phase
+
+- useEffect callbacks run here.
+- If a useEffect triggers a setState, the render cycle starts again.
+
+#### 3. Cleanup Phase
+
+- React performs cleanup inside the next useEffect call, not as a separate third phase
+
+### 🌀 Where Do Animations Fit?
+
+- CSS animations → Often run on a separate thread (GPU-accelerated).
+- JavaScript animations (manual DOM mutations) → Happen during the commit phase or in rerenders.
+- Changing state on an interval (like setInterval) triggers rerenders repeatedly, which can overload the render-commit-effect cycle if not throttled.
+
+### 🧠 Component Rerendering Logic
+
+- A state change or prop change will rerender the component and all its descendants.
+- React doesn’t guess which subtrees changed—it assumes all children must re-render unless told otherwise.
+
+#### Example:
+
+```plaintext
+Component Tree:
+App
+├── A (state changes here)
+│   ├── B
+│   └── C
+```
+
+If A changes, B and C rerender, unless memoized.
+
+### 📦 React 17 vs 18: Batching
+
+| Trigger Type           | React 17 Behavior | React 18 Behavior       |
+| ---------------------- | ----------------- | ----------------------- |
+| Synthetic events       | ✅ batched        | ✅ batched              |
+| `setTimeout` / `fetch` | ❌ not batched    | ✅ batched              |
+| Native DOM events      | ❌ not batched    | ✅ batched (if wrapped) |
+
+### 📉 How to Improve Render Performance
+
+1. Push state down in the component tree.
+
+   - Avoid lifting state higher than necessary.
+   - From the point of change, React rerenders everything downward.
+
+2. Prevent unnecessary rerenders
+
+   - Use React.memo() (functional components).
+   - Use shouldComponentUpdate or extend PureComponent (class components).
+   - Use useMemo, useCallback to memoize expensive calculations or functions.
+   - Use useRef to persist values across renders without triggering one.
+
+### 🔍 Why "unchanged props = no rerender" is not always true
+
+- The assumption only holds if:
+
+  - You use React.memo or similar.
+  - The component performs a shallow comparison and skips updates when props didn’t change.
+
+> Without explicit memoization or shallow compare, components rerender if their parent does, even if props haven’t changed.
+
+### 🔁 Summary Flow
+
+![](https://i.imgur.com/cn43gQE.jpeg)
+
+---
+
+## 1.4 - React Fiber
+
+### 🔧 React Fiber and Virtual DOM
+
+- Fiber is the internal data structure React uses to represent components. It tracks relationships like siblings and children and allows React to pause, resume, and optimize rendering.
+- `React is no longer "just a virtual DOM"`. It has grown significantly since its early days, and optimizations like Fiber make it more sophisticated.
+
+![](https://i.imgur.com/iRFnIwn.png)
+
+### 🔑 Importance of Keys in Lists
+
+- React uses keys to track elements across renders. `Good keys help React optimize DOM updates instead of re-rendering everything`.
+- `Avoid using Math.random() or array indexes as keys`:
+
+  - Math.random() is inconsistent.
+  - Indexes change with sorting or filtering, breaking tracking.
+
+> Array index as key is safe only if the list never changes in order, length, or content. Otherwise, use stable unique IDs.
+
+- Best practice: assign `a consistent and unique ID to each item` when the data is fetched or constructed. If the data lacks IDs, map over it to assign stable ones (e.g., `UUIDs or counters`).
+- Using duplicate keys (e.g., based on template names) can silently break rendering and lead to hard-to-diagnose bugs.
+
+### 🧠 React Rendering Heuristics
+
+- Avoid excessive or unnecessary DOM changes. For instance, changing an element from a div to a span dynamically can confuse React and hurt performance.
+- `Use consistent semantic HTML`, but don’t abuse clever tricks just to be "smart"; React relies on predictable patterns.
+- Sometimes React will re-render a full section, sometimes just part of it. It depends on the heuristics and what signals (like keys) you give it.
+- `React uses a diffing algorithm (reconciliation) based on element types and keys`. Predictable, consistent structures help avoid unnecessary DOM mutations.
+
+### ⚠️ Context API Gotchas
+
+- Lifting state via Context can cause unintentional re-renders across your app.
+- Wrapping large parts of the component tree with context providers will make changes cascade unless you're memoizing effectively or using patterns like splitting providers.
+- `useContext triggers a rerender whenever the context value changes`, even if only part of it is used. To avoid this `use value memoization or split context into smaller ones`.
+- Libraries like Redux (especially with `useSyncExternalStore` in React 18) can avoid these problems because they're optimized differently.
