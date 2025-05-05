@@ -124,6 +124,13 @@ Developers often have better hardware than users. Simulate slowness to catch rea
 - React 18 lets you delay non-urgent work to prioritize user interactions (like typing or clicking)
 - Avoid locking up the UI for background tasks
 
+### Takeaway:
+
+- Be cautious of `immediately-invoked functions in useState`.
+- `Use lazy initialization for expensive operations`, eg: `useState(() => generateRandomColor())`
+  - This delays execution until React calls it, avoiding pre-emptive JavaScript evaluation and unnecessary re-renders.
+- `Measure before fixing`, profiling tools help identify and validate real bottlenecks.
+
 ### 🧠 Final Thoughts
 
 - Performance is about doing less, not thinking harder
