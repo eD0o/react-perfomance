@@ -75,3 +75,6 @@ Move state to parent only if:
 | 📚 Tabs (switching view)          | No              | Yes (parent controls active tab)                            |
 | 📂 Accordion (open/close logic)   | No              | Yes (if only one section should be open)                    |
 | 🖼️ Gallery (select thumbnail)     | No              | Yes (parent updates selected image)                         |
+
+## 2.2 - Pulling Content Up
+
