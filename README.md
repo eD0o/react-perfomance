@@ -76,5 +76,83 @@ Move state to parent only if:
 | 📂 Accordion (open/close logic)   | No              | Yes (if only one section should be open)                    |
 | 🖼️ Gallery (select thumbnail)     | No              | Yes (parent updates selected image)                         |
 
-## 2.2 - Pulling Content Up
+---
 
+## 2.2 - Reducing Rerenders: Pull Content Up
+
+When a component doesn't depend on the state or props of its parent, you can "pull it up" `(move it higher in the tree) to avoid unnecessary rerenders`.
+
+### 🎯 The Problem: Nested Expensive Components
+
+`If you nest a heavy component like ExpensiveComponent inside a parent that rerenders often, React will re-run the child unnecessarily` — even if its inputs didn’t change.
+
+> ⚠️ React will not skip rendering a child unless its position in the tree is stable and memoized.
+
+### ✅ The Solution: Pull Content Up
+
+Move stable components outside of frequently rerendered parents — even if that means passing them as children.
+
+#### Before (heavy component rerenders too often):
+
+```tsx
+const Game = () => {
+  return (
+    <>
+      {/* State-driven rendering */}
+      <GameInput />
+      <ExpensiveComponent /> // rerenders every time Game rerenders
+    </>
+  );
+};
+```
+
+#### After (stable component hoisted):
+
+```tsx
+const Application = () => {
+  return (
+    <Game>
+      <ExpensiveComponent /> // passed as children, never redefined
+    </Game>
+  );
+};
+```
+
+```tsx
+const Game = ({ children }) => {
+  return (
+    <>
+      <GameInput ... />
+      {children} // doesn't rerender unless children change
+    </>
+  );
+};
+```
+
+Now ExpensiveComponent is `only rendered once unless its own props change`.
+
+### 💡 Why It Works
+
+- React compares children by reference.
+- Pulling stable components up ensures they’re not redefined on every render.
+- This is `especially helpful for expensive or memoized components`.
+
+### 🧠 When to Pull Content Up
+
+Use this strategy if:
+
+- A child component is `expensive to render`
+- It `doesn’t depend on dynamic state/props from the parent`
+- It `could be memoized` (React.memo) or kept stable
+
+### Summary Table
+
+| Scenario                               | Push State Down | Pull Content Up       |
+| -------------------------------------- | --------------- | --------------------- |
+| ✅ Local input control                 | Yes             | No                    |
+| 🧠 Stable, heavy child component       | No              | Yes                   |
+| 📦 Reusable UI with no state coupling  | No              | Yes                   |
+| 🧪 Components depending on local state | Yes             | No                    |
+| ⚙️ Performance bottlenecks in tree     | Maybe           | Yes (hoist stateless) |
+
+---
