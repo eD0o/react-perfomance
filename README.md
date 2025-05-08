@@ -156,3 +156,157 @@ Use this strategy if:
 | ⚙️ Performance bottlenecks in tree     | Maybe           | Yes (hoist stateless) |
 
 ---
+
+## 2.3 When to Use React.memo, useMemo, and useCallback
+
+These hooks and utilities `help optimize rendering performance by avoiding unnecessary recalculations or re-renders`.
+
+> However, overusing them can harm readability and even performance. Use them strategically when performance is a real concern.
+
+### 📊 Comparison Table
+
+| Feature     | Purpose                           | Use When…                                                             | Returns               | Common Pitfall                           |
+| ----------- | --------------------------------- | --------------------------------------------------------------------- | --------------------- | ---------------------------------------- |
+| React.memo  | Prevents re-renders of components | A component receives the same props across renders                    | A memoized component  | Won’t work if props change every time    |
+| useMemo     | Memoizes a value or computation   | A calculation is expensive or a new object causes unwanted re-renders | The memoized value    | Overused for cheap operations            |
+| useCallback | Memoizes a function               | A callback is passed to memoized children                             | The memoized function | Use only when function reference matters |
+
+### React.memo example: Avoid re-render when props are the same
+
+```tsx
+const UserName = React.memo(({ name }: { name: string }) => {
+  console.log("Rendering UserName");
+  return <div>{name}</div>;
+});
+
+export const App = () => {
+  const [count, setCount] = useState(0);
+  return (
+    <>
+      <UserName name="Du" />
+      <button onClick={() => setCount(count + 1)}>Increment</button>
+    </>
+  );
+};
+```
+
+Use React.memo when a component:
+
+- `Is pure` (output only depends on props)
+- Receives `props that change infrequently`
+- Avoids re-rendering when its parent re-renders unnecessarily
+
+### useMemo example: Memoize an expensive computation
+
+```tsx
+export const App = () => {
+  const [num, setNum] = useState(1);
+
+  const factorial = useMemo(() => {
+    console.log("Calculating factorial");
+    return Array.from({ length: num }, (_, i) => i + 1).reduce(
+      (a, b) => a * b,
+      1
+    );
+  }, [num]);
+
+  return (
+    <>
+      <p>Factorial: {factorial}</p>
+      <button onClick={() => setNum((n) => n + 1)}>Increment</button>
+    </>
+  );
+};
+```
+
+Use useMemo when:
+
+- You have `expensive calculations`
+- You’re `returning objects/arrays used in dependencies`
+- Avoiding unnecessary changes in reference equality is crucial
+
+### useCallback example: Keep function identity stable for memoized children
+
+```tsx
+const Button = React.memo(({ onClick }: { onClick: () => void }) => {
+  console.log("Rendering Button");
+  return <button onClick={onClick}>Click me</button>;
+});
+
+export const App = () => {
+  const [count, setCount] = useState(0);
+
+  const handleClick = useCallback(() => {
+    console.log("Clicked!");
+  }, []); // stable reference
+
+  return (
+    <>
+      <Button onClick={handleClick} />
+      <button onClick={() => setCount((c) => c + 1)}>Increment</button>
+    </>
+  );
+};
+```
+
+Use useCallback when:
+
+- You're passing `callback props to memoized children` (React.memo)
+- You need to `maintain stable function references`
+
+Yes — here are a few important final insights to round out the section and help you apply these tools more wisely:
+
+### 🧠 Final Tips on Performance Hooks
+
+#### Only Optimize When Needed
+
+- `Measure before optimizing`. Premature optimization can lead to bloated code.
+- Use tools like `React DevTools Profiler, why-did-you-render, or Performance tab in DevTools` to find real bottlenecks.
+
+#### 📎 Dependencies Matter
+
+- `useMemo and useCallback only work correctly if their dependency arrays are accurate`.
+- `Missing a dependency can lead to bugs` that are hard to trace.
+
+#### 🧩 React.memo + useCallback ≠ Always Better
+
+- Even if you memoize a component and its props, `React still needs to do shallow comparison`.
+- If props are complex or change often, the cost of memoization can outweigh the benefits.
+
+#### 📦 Consider Context Scope Too
+
+- If you're using a global context or a large parent state, breaking up components and pushing state downward can often improve performance more than hooks.
+
+### 🚫 Anti-pattern Example (Overuse)
+
+```tsx
+// Overkill: memoizing everything for a cheap operation
+const ExpensiveCalculation = React.memo(({ value }: { value: number }) => {
+  const result = useMemo(() => value * 2, [value]);
+  return <div>{result}</div>;
+});
+```
+
+> ⚠️ This adds unnecessary complexity. Multiplying by 2 isn’t "expensive". Don’t optimize what’s not a problem.
+
+### 🧰 Bonus Tool: `why-did-you-render`
+
+If you're optimizing render behavior, consider installing:
+
+```bash
+npm install @welldone-software/why-did-you-render
+```
+
+Then:
+
+```ts
+import React from "react";
+if (process.env.NODE_ENV === "development") {
+  const whyDidYouRender = require("@welldone-software/why-did-you-render");
+  whyDidYouRender(React);
+}
+```
+
+It tells you why a component re-rendered — great for understanding which props or contexts changed.
+
+---
