@@ -310,3 +310,92 @@ if (process.env.NODE_ENV === "development") {
 It tells you why a component re-rendered — great for understanding which props or contexts changed.
 
 ---
+
+## 2.4 - useReducer & dispatch
+
+The useReducer hook is a powerful alternative to useState, `especially useful when managing complex state logic or coordinating updates across deeply nested components`. It shines when you need to:
+
+- Update state based on previous state
+- Centralize logic around how state updates happen
+- Avoid unnecessary useCallback usage by stabilizing handlers
+
+### 🧠 Key Concepts
+
+- useReducer returns a state and a dispatch function.
+- You send actions (usually objects) to the reducer via dispatch.
+- The reducer contains all update logic, acting as a central authority.
+
+```tsx
+const [state, dispatch] = useReducer(reducerFn, initialState);
+```
+
+### ✅ Benefits Over useState with useCallback
+
+| With useState                                                   | With useReducer                                        |
+| --------------------------------------------------------------- | ------------------------------------------------------ |
+| Need to define update, remove, etc. with useCallback            | `dispatch is static, no need for memoized callbacks`   |
+| Can trigger re-renders by prop changes due to unstable handlers | dispatch stays the same across renders                 |
+| Manually juggle logic in event handlers                         | Centralize logic in reducer: easier to test & maintain |
+
+### Example: Toggling Packed State
+
+Using useState + useCallback:
+
+```tsx
+const [items, setItems] = useState(initialItems);
+
+const togglePacked = useCallback((id) => {
+  setItems((items) =>
+    items.map((item) =>
+      item.id === id ? { ...item, packed: !item.packed } : item
+    )
+  );
+}, []);
+```
+
+Using useReducer:
+
+```tsx
+function reducer(state, action) {
+  switch (action.type) {
+    case "TOGGLE_PACKED":
+      return state.map((item) =>
+        item.id === action.id ? { ...item, packed: !item.packed } : item
+      );
+    default:
+      return state;
+  }
+}
+
+const [items, dispatch] = useReducer(reducer, initialItems);
+
+// Use it like:
+dispatch({ type: "TOGGLE_PACKED", id: itemId });
+```
+
+Because dispatch is always the same reference, passing it down avoids re-renders that occur when update or remove functions are re-created via useCallback. You can remove many useCallback calls just by centralizing the logic in the reducer.
+
+This makes useReducer a performance win, especially in memoized lists.
+
+### 🧪 Testing Advantage
+
+With a pure reducer function, logic becomes trivially testable:
+
+```ts
+it("toggles packed", () => {
+  const state = [{ id: 1, packed: false }];
+  const newState = reducer(state, { type: "TOGGLE_PACKED", id: 1 });
+  expect(newState[0].packed).toBe(true);
+});
+```
+
+### 🧭 When to Prefer useReducer
+
+Use useReducer when:
+
+- State transitions are non-trivial or interrelated
+- You’re building a form with many fields
+- You want to decouple state update logic from component hierarchy
+- You want better testing and readability for state changes
+
+---
