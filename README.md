@@ -313,7 +313,7 @@ It tells you why a component re-rendered — great for understanding which props
 
 ## 2.4 - useReducer & dispatch
 
-The useReducer hook is a powerful alternative to useState, `especially useful when managing complex state logic or coordinating updates across deeply nested components`. It shines when you need to:
+The useReducer hook is a powerful alternative to useState, `especially useful when managing complex state logic or coordinating updates across deeply nested components`. It shines in scenarios where you need to:
 
 - Update state based on previous state
 - Centralize logic around how state updates happen
@@ -329,13 +329,13 @@ The useReducer hook is a powerful alternative to useState, `especially useful wh
 const [state, dispatch] = useReducer(reducerFn, initialState);
 ```
 
-### ✅ Benefits Over useState with useCallback
+### ✅ Benefits Over useState + useCallback
 
-| With useState                                                   | With useReducer                                        |
-| --------------------------------------------------------------- | ------------------------------------------------------ |
-| Need to define update, remove, etc. with useCallback            | `dispatch is static, no need for memoized callbacks`   |
-| Can trigger re-renders by prop changes due to unstable handlers | dispatch stays the same across renders                 |
-| Manually juggle logic in event handlers                         | Centralize logic in reducer: easier to test & maintain |
+| With useState                                                                                              | With useReducer                                        |
+| ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Need to define update, remove, etc. with useCallback                                                       | `dispatch is static, no need for memoized callbacks`   |
+| Handlers created with useCallback can still cause re-renders if their dependencies change or aren’t stable | dispatch stays the same across renders                 |
+| Manually juggle logic in event handlers                                                                    | Centralize logic in reducer: easier to test & maintain |
 
 ### Example: Toggling Packed State
 
@@ -375,6 +375,16 @@ dispatch({ type: "TOGGLE_PACKED", id: itemId });
 
 Because dispatch is always the same reference, passing it down avoids re-renders that occur when update or remove functions are re-created via useCallback. You can remove many useCallback calls just by centralizing the logic in the reducer.
 
+- dispatch is always stable, no need for useCallback
+- No prop change detection or dependency arrays needed
+- All logic is centralized in reducer, outside JSX
+- Prevents prop-drilling of handlers (onUpdate, onRemove) with unstable refs
+
+📌 In memoized trees (React.memo), this means fewer renders.
+
+> With useReducer, you're pushing logic into a reducer, which is inherently pure and stable. With useMemo/useCallback, you're working reactively around unstable closures, fixing the symptom, not the cause.
+> Don’t memorize functions. Remove the need to memorize them.
+
 This makes useReducer a performance win, especially in memoized lists.
 
 ### 🧪 Testing Advantage
@@ -399,3 +409,26 @@ Use useReducer when:
 - You want better testing and readability for state changes
 
 ---
+
+## 2.5 - useReducer (React) vs Reducer in Redux
+
+### Similarities
+
+- Both use pure functions: (state, action) => newState
+- Both use dispatch to trigger state updates via actions
+- Both are conceptually based on the Reducer Pattern, which is a core idea in functional programming
+
+### Key Differences
+
+| Feature                    | useReducer (React)             | Redux Reducer                           |
+| -------------------------- | ------------------------------ | --------------------------------------- |
+| Scope                      | Local to a component           | Global (application-wide store)         |
+| Middleware support         | ❌ Not supported               | ✅ Fully supported                      |
+| DevTools                   | ❌ No Redux DevTools           | ✅ Time-travel debugging, logging, etc. |
+| Enhancers / Plugins        | ❌ No plugin support           | ✅ Via store enhancers                  |
+| Persistence                | ❌ Must handle manually        | ✅ Commonly integrated                  |
+| Async logic (thunks/sagas) | ❌ Must use useEffect manually | ✅ Middleware like thunk, saga          |
+
+So yes, while the syntax is similar, `Redux is a much more powerful architecture meant for global shared state, debugging, and async flows`.
+
+`useReducer is great for isolated logic inside a component`.
