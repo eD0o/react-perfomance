@@ -119,3 +119,73 @@ const useDispatch = () => useContext(ActionsContext);
 - Mirrors React-Redux patterns for familiarity (useDispatch etc.).
 
 > Abstracting complexity is fine, as long as it's well-documented and easy to refactor later (e.g., migrating to Redux).
+
+## 📦 3.3 - Normalizing State Shape for Better Performance
+
+### 🔍 Problem
+
+Even with Context split and memo() used, unnecessary re-renders can still happen if:
+
+- You pass `deeply nested objects` (e.g. users with embedded posts).
+- These objects are reconstructed every time, breaking referential equality.
+- React.memo, useMemo, and useCallback become ineffective.
+
+### ✅ Solution: Normalize the Data
+
+`Normalize your state into flat maps, like in Redux-style stores`. This allows:
+
+- Updating and accessing by ID.
+- Easier caching and memoization.
+- Efficient diffing: components re-render only if the data they depend on changes.
+
+Example Version:
+
+```json
+{
+  "users": [
+    {
+      "id": 1,
+      "name": "Alice",
+      "posts": [
+        { "id": 101, "title": "Hello World" },
+        { "id": 102, "title": "Another Post" }
+      ]
+    }
+  ]
+}
+```
+
+Normalized Version:
+
+```ts
+const normalizedState = {
+  users: {
+    byId: {
+      1: { id: 1, name: "Alice", posts: [101, 102] },
+    },
+    allIds: [1],
+  },
+  posts: {
+    byId: {
+      101: { id: 101, title: "Hello World" },
+      102: { id: 102, title: "Another Post" },
+    },
+    allIds: [101, 102],
+  },
+};
+```
+
+### 🧠 Benefits
+
+- You avoid deep prop trees.
+- Easy to share data across components without duplicating structure.
+- `Works great with Context, memo, selectors,` and even state libraries like Redux or Zustand.
+
+> Treat state like a mini in-memory database.
+
+### 💡 Extra Tip
+
+If you deal with nested APIs frequently, consider:
+
+- Libraries like [normalizr](https://github.com/paularmstrong/normalizr)
+- Writing a custom transformer function
