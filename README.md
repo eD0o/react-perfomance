@@ -1,191 +1,62 @@
-# 3 - Context
+# 4 - Suspense & Transitions
 
-## 3.1 - Context API
+## 4.1 - Suspense (Component-Level Code Splitting)
 
-Context API `solves prop-drilling by allowing data to be passed deeply through the component tree` without explicitly passing props at every level. `However, context updates bypass some memoization optimizations, triggering re-renders in all consuming components, even if useMemo or React.memo are used`. This highlights the trade-off between convenience and performance when using Context.
+Suspense in React is a `set of APIs designed to handle asynchronous behavior`, particularly around loading components or data. While some parts are still experimental or framework-specific (like data fetching), lazy-loading components with Suspense is fully supported today.
 
-### Problem (packing-list repo)
+### Why is Suspense useful?
 
-- dispatch or setItems had to be passed through intermediate components that didn't use them.
-- While this didn’t harm performance (thanks to stable references), it made the code messy and harder to scale.
+- You don’t need to load all components for every page upfront.
+- You can `progressively load parts of your application as users need them`, improving initial load performance.
+- Useful especially for rarely used parts of the app, like settings or admin pages.
 
-### Solution: Context API
+### Key Concepts
 
-- createContext() defines a `shared value accessible to any component using useContext()`.
-- A Provider component wraps part of the app to expose shared values (e.g. items, dispatch).
-- Simplifies component trees by removing the need to pass props like dispatch or items.
+- Suspense Boundary: Like an error boundary, but used to wrap lazy-loaded components. Shows a fallback UI (like a loading spinner) while the component is being fetched.
+- React.lazy(): Allows you to dynamically import components. Works well with Suspense to delay loading until needed.
+- import(): The native ES module function used behind the scenes to dynamically fetch a file.
 
-![](https://i.imgur.com/LJAb1qu.png)
-
-### Refactor Steps
-
-1. Create context with createContext().
-2. Define a Provider component (ItemsProvider) that holds state and reducer.
-3. Wrap the app in this provider.
-4. Use useContext in deeply nested components to access values directly.
-5. Delete redundant prop-passing.
-
-### Trade-offs / Gotchas
-
-- Switching to context caused all consuming components to re-render, even though memoization was in place.
-- Reason: Context is a hidden prop, when it changes, all consumers re-render.
-- useMemo doesn’t prevent re-renders triggered by context updates.
-
-### Core Insight
-
-> "Context avoids prop-drilling but behaves like a prop. If its value changes, all subscribers re-render."
-
-### Performance Tip
-
-- Use context wisely, `Avoid storing frequently changing values (e.g., large lists, local state) in context, as it causes unnecessary re-renders across all consumers.`.
-- Consider splitting context or `combining it with techniques like useMemo, useCallback, or selector patterns`.
-
-## 🧠 3.2 - Using Multiple Contexts
-
-### 🧩 The Core Problem
-
-A single object combining multiple values ({ items, dispatch }) passed to context leads to unnecessary re-renders:
-
-- Even if items and dispatch haven't changed, the object reference is new each render.
-- React.memo comparisons break because of the new object.
-- This results in memoized components rerendering needlessly.
-
-### 🔍 React Rules Revisited
-
-- Even when individual values (like dispatch) remain unchanged, the `context is treated as changed due to new object identity`.
-- React's reactivity is working correctly, but it's `causing unintended side effects in this case`.
-
-### 🛠️ The Solution: Use Two Contexts
-
-> One shared context can lead to unnecessary re-renders; splitting it into multiple contexts allows more granular subscriptions..
-
-### ✅ Why Two Contexts?
-
-- Split the context into:
-
-  - ItemsContext – for values that change frequently (items)
-  - ActionsContext – for values that rarely change (dispatch)
-
-- `Components only re-render when the part they care about changes`.
-
-### ⚠️ Order Matters
-
-- Place static context (dispatch) outside the dynamic one (items) to `avoid unnecessary child re-renders`.
-- Parent context triggers children rerenders — so order affects performance.
+Here’s how you might use it in a notes app:
 
 ```tsx
-<ActionsContext.Provider value={dispatch}>
-  <ItemsContext.Provider value={items}>{children}</ItemsContext.Provider>
-</ActionsContext.Provider>
-```
+import { lazy, Suspense } from "react";
 
-> You can nest multiple Providers, but evaluate whether the added complexity is justified by the performance benefits.
+const Editor = lazy(() => simulateNetwork(() => import("./Editor")));
 
-```tsx
-return (
-  <ActionsContext.Provider value={actions}>
-    <UsersContext.Provider value={users}>
-      <PostsContext.Provider value={posts}>{children}</PostsContext.Provider>
-    </UsersContext.Provider>
-  </ActionsContext.Provider>
-);
-```
+function NoteView({ isEditing }) {
+  if (isEditing) {
+    return (
+      <Suspense fallback={<LoadingIndicator />}>
+        <Editor />
+      </Suspense>
+    );
+  }
 
-```tsx
-export const useActions = () => {
-  return useContext(ActionsContext);
-};
-
-export const useUsers = () => {
-  return useContext(UsersContext);
-};
-
-export const usePosts = () => {
-  return useContext(PostsContext);
-};
-```
-
-### 🧼 Abstraction: Hiding the Complexity
-
-#### 🧱 Create Custom Hooks
-
-```tsx
-const useItems = () => useContext(ItemsContext);
-const useDispatch = () => useContext(ActionsContext);
-```
-
-- Encapsulates “bad” complexity.
-- Simplifies switching to Redux or other state libraries in the future.
-- Mirrors React-Redux patterns for familiarity (useDispatch etc.).
-
-> Abstracting complexity is fine, as long as it's well-documented and easy to refactor later (e.g., migrating to Redux).
-
-## 📦 3.3 - Normalizing State Shape for Better Performance
-
-### 🔍 Problem
-
-Even with Context split and memo() used, unnecessary re-renders can still happen if:
-
-- You pass `deeply nested objects` (e.g. users with embedded posts).
-- These objects are reconstructed every time, breaking referential equality.
-- React.memo, useMemo, and useCallback become ineffective.
-
-### ✅ Solution: Normalize the Data
-
-`Normalize your state into flat maps, like in Redux-style stores`. This allows:
-
-- Updating and accessing by ID.
-- Easier caching and memoization.
-- Efficient diffing: components re-render only if the data they depend on changes.
-
-Example Version:
-
-```json
-{
-  "users": [
-    {
-      "id": 1,
-      "name": "Alice",
-      "posts": [
-        { "id": 101, "title": "Hello World" },
-        { "id": 102, "title": "Another Post" }
-      ]
-    }
-  ]
+  return <NoteContent />;
 }
 ```
 
-Normalized Version:
+> simulateNetwork is just a mock to delay loading for demo purposes.
 
-```ts
-const normalizedState = {
-  users: {
-    byId: {
-      1: { id: 1, name: "Alice", posts: [101, 102] },
-    },
-    allIds: [1],
-  },
-  posts: {
-    byId: {
-      101: { id: 101, title: "Hello World" },
-      102: { id: 102, title: "Another Post" },
-    },
-    allIds: [101, 102],
-  },
-};
-```
+### Performance Benefit
 
-### 🧠 Benefits
+JavaScript bundles take longer to load and parse than assets like images. Loading everything upfront hurts performance. Suspense lets you:
 
-- You avoid deep prop trees.
-- Easy to share data across components without duplicating structure.
-- `Works great with Context, memo, selectors,` and even state libraries like Redux or Zustand.
+- Keep the initial bundle smaller.
+- Improve Time-to-Interactive.
+- Dynamically load parts only when needed (e.g., only load the editor when "Edit" is clicked).
 
-> Treat state like a mini in-memory database.
+### Real-world usage
 
-### 💡 Extra Tip
+Even in production apps, you could:
 
-If you deal with nested APIs frequently, consider:
+- `Delay loading parts of the UI that are not critical to the initial view`.
+- Preload code on hover or interaction intent to avoid jank.
+- `Combine with routing systems like React Router or Next.js for page-level code splitting`.
 
-- Libraries like [normalizr](https://github.com/paularmstrong/normalizr)
-- Writing a custom transformer function
+### What's Not Ready Yet?
+
+- Suspense for data fetching is still not available in plain React apps.
+
+  - Some frameworks like Next.js or Remix support it.
+  - It’s in active development and will allow you to suspend while waiting for async data (instead of manually setting loading/error states).
